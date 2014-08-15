@@ -1,0 +1,152 @@
+#!/usr/bin/env perl
+use strict;
+use Getopt::Long;
+use Data::Dumper;
+
+my ($config_path) = "";
+my $add_to_db = 0;
+GetOptions(
+    'c|config_path:s' =>  \$config_path,
+    'a|add' =>  \$add_to_db,
+);
+
+my $usage = "usage: $0 -e <config-path>\n";
+@ARGV == 0 || die($usage);
+die ($usage) if (!$config_path);
+
+my %config = read_config($config_path);
+
+my @scan_output = `$config{"scan_command"}`;
+
+my %datastructure = parse_output(@scan_output);
+
+sub parse_output {
+	my @output = @_;
+	my $address = "";
+	my %datastructure = ();
+	foreach my $line (@output){
+		if ($line =~ /- Address:/){
+			($address) = $line =~ /- Address: (.+)$/;
+			if ($datastructure{$address}){
+				print "$address found multiple times, possible spoof attempt\n";
+				exit 2;
+			} else {
+				$datastructure{$address} = {};
+			}
+		}
+		if ($line =~ /ESSID:/){
+			my ($essid) = $line =~ /ESSID:"(.+)"$/;
+			$datastructure{$address}->{"essid"} = $essid;
+		}
+		if ($line =~ /Protocol:/){
+			my ($protocol) = $line =~ /Protocol:(.+)$/;
+			$datastructure{$address}->{"protocol"} = $protocol;
+		}
+		if ($line =~ /Mode:/){
+                        my ($mode) = $line =~ /Mode:(.+)$/;
+                        $datastructure{$address}->{"mode"} = $mode;
+
+		}
+        	if ($line =~ /Frequency:/){
+                        my ($frequency, $channel) = $line =~ /Frequency:(.+) \(Channel (.+)\)$/;
+                        $datastructure{$address}->{"frequency"} = $frequency;
+                        $datastructure{$address}->{"channel"} = $channel;
+
+		}
+        	if ($line =~ /Encryption key:/){
+                        my ($encryptionkey) = $line =~ /Encryption key:(.+)$/;
+                        $datastructure{$address}->{"encryptionkey"} = $encryptionkey;
+
+		}
+        	if ($line =~ /Bit Rates:/){
+                        my ($bitrates) = $line =~ /Bit Rates:(.+)$/;
+                        $datastructure{$address}->{"bitrates"} = $bitrates;
+
+		}
+        	if ($line =~ /Quality=/){
+                        my ($quality) = $line =~ /Quality=(.+?)\/100/;
+                        $datastructure{$address}->{"quality"} = $quality;
+                        my ($signalstrength) = $line =~ /Signal level=(.+?)\/100/;
+                        $datastructure{$address}->{"signalstrength"} = $signalstrength;
+		}
+        	if ($line =~ /Extra:/){
+                        my ($extra) = $line =~ /Extra:(.+)$/;
+			if ($datastructure{$address}->{"extra"}){
+	                        $datastructure{$address}->{"extra"} .= "; $extra";
+			} else {
+	                        $datastructure{$address}->{"extra"} = $extra;
+			}
+		}
+        	if ($line =~ /IE:/){
+                        my ($ie) = $line =~ /IE: (.+)$/;
+			if ($datastructure{$address}->{"ie"}){
+	                        $datastructure{$address}->{"ie"} .= "; $ie";
+			} else {
+	                        $datastructure{$address}->{"ie"} = $ie;
+			}
+		}
+        	if ($line =~ /Group Cipher : /){
+                        my ($gcipher) = $line =~ /Group Cipher : (.+)$/;
+			if ($datastructure{$address}->{"groupcipher"}){
+	                        $datastructure{$address}->{"groupcipher"} .= "; $gcipher";
+			} else {
+	                        $datastructure{$address}->{"groupcipher"} = $gcipher;
+			}
+		}
+        	if ($line =~ /Pairwise Ciphers /){
+                        my ($pcipher) = $line =~ /Pairwise Ciphers.*: (.+)$/;
+			if ($datastructure{$address}->{"pairwiseciphers"}){
+	                        $datastructure{$address}->{"pairwiseciphers"} .= "; $pcipher";
+			} else {
+	                        $datastructure{$address}->{"pairwiseciphers"} = $pcipher;
+			}
+		}
+        	if ($line =~ /Authentication Suites /){
+                        my ($auth) = $line =~ /Authentication Suites.*: (.+)$/;
+			if ($datastructure{$address}->{"auth"}){
+	                        $datastructure{$address}->{"auth"} .= "; $auth";
+			} else {
+	                        $datastructure{$address}->{"auth"} = $auth;
+			}
+		}
+
+	}
+	return(%datastructure);
+}
+
+print Dumper(%datastructure);
+
+sub read_config {
+
+	my $config_path = shift;
+	
+	if (!-r $config_path){
+		die("Could not read the config file. Please check $config_path\n");
+	}
+
+	my %config = ();
+	open CONFIG, " < $config_path" || die("could not open $config_path\n");
+	foreach my $line (<CONFIG>){
+
+		chomp($line);
+		next if ($line =~ /^#/);
+
+		my ($parameter, $value) = split(/=/, $line);
+		$parameter =~ s/^\s+//;
+		$value =~ s/^\s+//;
+		$parameter =~ s/\s+$//;
+		$value =~ s/\s+$//;
+
+		$config{"scan_command"} = $value if ($parameter eq "scan_command");
+		$config{"ap_database"} = $value if ($parameter eq "ap_database");
+		$config{"sqlite"} = $value if ($parameter eq "sqlite");
+	}
+	close CONFIG;
+
+	if ($config{"scan_command"} && $config{"ap_database"} && $config{"sqlite"}){
+		return(%config);
+	}
+	else {
+		die("Config file is incomplete\n.");
+	}
+}
