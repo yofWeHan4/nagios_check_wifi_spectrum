@@ -20,6 +20,28 @@ my @scan_output = `$config{"scan_command"}`;
 
 my %datastructure = parse_output(@scan_output);
 
+if ($add_to_db){
+	add_entries_to_db(\%datastructure, $config{"ap_database"});
+}
+
+#compare_and_update_db(\%datastructure, $config{"ap_database"});
+
+sub add_entries_to_db {
+	my ($datastructure, $database) = @_;
+
+	foreach my $address (keys(%$datastructure)){
+		print "$$datastructure{$address}->{essid}\n"
+	}
+}
+
+sub compare_and_update_db {
+	my ($datastructure, $database) = @_;
+}
+
+sub find_and_update_entry {
+
+}
+
 sub parse_output {
 	my @output = @_;
 	my $address = "";
@@ -113,8 +135,6 @@ sub parse_output {
 	}
 	return(%datastructure);
 }
-
-print Dumper(%datastructure);
 
 sub read_config {
 
