@@ -58,7 +58,8 @@ sub insert_entry {
 				'$entry->{ie}',
 				'$entry->{groupcipher}',
 				'$entry->{pairwisecipher}',
-				'$entry->{auth}'
+				'$entry->{auth}',
+				null # field for manual comments
 			);";
 	my $result = `$config{"sqlite"} $database "$query"`;
 }

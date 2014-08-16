@@ -3,7 +3,7 @@ how to create the initial database
 
 	CREATE TABLE access_points (
 		id INTEGER PRIMARY KEY,
-		address TEXT,
+		address TEXT UNIQUE,
 		essid TEXT NOT NULL,
 		mode TEXT NOT NULL,
 		frequency TEXT NOT NULL,
@@ -16,5 +16,6 @@ how to create the initial database
 		ie TEXT,
 		groupcipher TEXT,
 		pairwisecipher TEXT,
-		auth TEXT
+		auth TEXT,
+		comment TEXT
 	);
