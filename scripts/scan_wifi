@@ -40,6 +40,27 @@ sub add_entries_to_db {
 	}
 }
 
+sub insert_entry {
+	my ($address, $entry, $database) = @_;
+	my $query = "INSERT INTO access_points 
+			VALUES (null,
+				'$address',
+				'$entry->{essid}',
+				'$entry->{mode}',
+				'$entry->{frequency}',
+				'$entry->{channel}',
+				'$entry->{encryptionkey}',
+				'$entry->{bitrates}',
+				'$entry->{quality}',
+				'$entry->{signalstrength}',
+				'$entry->{extra}',
+				'$entry->{ie}',
+				'$entry->{groupwisecipher}',
+				'$entry->{auth}'
+			);";
+	my $result = `$config{"sqlite"} $database "$query"`:
+}
+
 sub update_entry {
 	my ($id, $entry, $database) = @_;
 	my $query = "UPDATE access_points
