@@ -58,7 +58,7 @@ sub insert_entry {
 				'$entry->{groupwisecipher}',
 				'$entry->{auth}'
 			);";
-	my $result = `$config{"sqlite"} $database "$query"`:
+	my $result = `$config{"sqlite"} $database "$query"`;
 }
 
 sub update_entry {
