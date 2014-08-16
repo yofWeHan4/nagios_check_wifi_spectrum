@@ -55,7 +55,8 @@ sub insert_entry {
 				'$entry->{signalstrength}',
 				'$entry->{extra}',
 				'$entry->{ie}',
-				'$entry->{groupwisecipher}',
+				'$entry->{groupcipher}',
+				'$entry->{pairwisecipher}',
 				'$entry->{auth}'
 			);";
 	my $result = `$config{"sqlite"} $database "$query"`;
@@ -63,20 +64,20 @@ sub insert_entry {
 
 sub update_entry {
 	my ($id, $entry, $database) = @_;
-	my $query = "UPDATE access_points
-				SET essid = '$entry->{essid}',
-				SET mode = '$entry->{mode}',
-				SET frequency = '$entry->{frequency}',
-				SET channel = '$entry->{channel}',
-				SET encryptionkey = '$entry->{encryptionkey}',
-				SET bitrates = '$entry->{bitrates}',
-				SET quality = '$entry->{quality}',
-				SET signalstrength = '$entry->{signalstrength}',
-				SET extra = '$entry->{extra}',
-				SET ie = '$entry->{ie}',
-				SET groupcipher = '$entry->{groupcipher}',
-				SET pairwisecipher = '$entry->{pairwisecipher}',
-				SET auth = '$entry->{auth}'
+	my $query = "UPDATE access_points SET
+				essid = '$entry->{essid}',
+				mode = '$entry->{mode}',
+				frequency = '$entry->{frequency}',
+				channel = '$entry->{channel}',
+				encryptionkey = '$entry->{encryptionkey}',
+				bitrates = '$entry->{bitrates}',
+				quality = '$entry->{quality}',
+				signalstrength = '$entry->{signalstrength}',
+				extra = '$entry->{extra}',
+				ie = '$entry->{ie}',
+				groupcipher = '$entry->{groupcipher}',
+				pairwisecipher = '$entry->{pairwisecipher}',
+				auth = '$entry->{auth}'
 			WHERE id = $id;";
 	my $result = `$config{"sqlite"} $database "$query"`;
 }
@@ -98,7 +99,7 @@ sub validate {
 sub find_normal_entry {
 	my ($address, $entry, $database) = @_;
 	my $query = "select * from access_points where address = '$address';";
-	my $row = "$config{sqlite} $database $query";
+	my $row = `$config{sqlite} $database "$query"`;
 	chomp($row);
 	my @row = split(/\|/, $row);
 	my $id = $row[0];
