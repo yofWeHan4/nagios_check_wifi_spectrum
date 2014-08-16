@@ -1,7 +1,7 @@
 how to create the initial database
 ==================================
 
-CREATE TABLE access_points (
+`CREATE TABLE access_points (
   id INTEGER PRIMARY KEY,
   address TEXT,
   essid TEXT NOT NULL,
@@ -17,4 +17,4 @@ CREATE TABLE access_points (
   groupcipher TEXT,
   pairwisecipher TEXT,
   auth TEXT
-);
+);`
