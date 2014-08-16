@@ -42,6 +42,7 @@ sub add_entries_to_db {
 
 sub insert_entry {
 	my ($address, $entry, $database) = @_;
+	print "inserting $entry->{essid} ($address)\n";
 	my $query = "INSERT INTO access_points 
 			VALUES (null,
 				'$address',
@@ -123,7 +124,7 @@ sub anomality_check {
 		exit 1;
 	}
 	if ($$row[6] ne $entry->{"encryptionkey"}){
-		print "Encryption of $$row[2] ($$row[1]) changed from: $$row[6] to $entry->{channel}\n";
+		print "Encryption of $$row[2] ($$row[1]) changed from: $$row[6] to $entry->{encryptionkey}\n";
 		exit 2;
 	}
 }
