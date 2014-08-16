@@ -24,22 +24,86 @@ if ($add_to_db){
 	add_entries_to_db(\%datastructure, $config{"ap_database"});
 }
 
-#compare_and_update_db(\%datastructure, $config{"ap_database"});
+validate(\%datastructure, $config{"ap_database"});
 
 sub add_entries_to_db {
 	my ($datastructure, $database) = @_;
 
 	foreach my $address (keys(%$datastructure)){
-		print "$$datastructure{$address}->{essid}\n"
+		my $id = find_normal_entry($address, $$datastructure{$address}, $database);
+		if ($id){
+			update_entry($id, $$datastructure{$address}, $database);
+		}
+		else {
+			insert_entry($address, $$datastructure{$address}, $database);
+		}
 	}
 }
 
-sub compare_and_update_db {
-	my ($datastructure, $database) = @_;
+sub update_entry {
+	my ($id, $entry, $database) = @_;
+	my $query = "UPDATE access_points
+				SET essid = '$entry->{essid}',
+				SET mode = '$entry->{mode}',
+				SET frequency = '$entry->{frequency}',
+				SET channel = '$entry->{channel}',
+				SET encryptionkey = '$entry->{encryptionkey}',
+				SET bitrates = '$entry->{bitrates}',
+				SET quality = '$entry->{quality}',
+				SET signalstrength = '$entry->{signalstrength}',
+				SET extra = '$entry->{extra}',
+				SET ie = '$entry->{ie}',
+				SET groupcipher = '$entry->{groupcipher}',
+				SET pairwisecipher = '$entry->{pairwisecipher}',
+				SET auth = '$entry->{auth}'
+			WHERE id = $id;";
+	my $result = `$config{"sqlite"} $database "$query"`;
 }
 
-sub find_and_update_entry {
+sub validate {
+	my ($datastructure, $database) = @_;
+	foreach my $address (keys(%$datastructure)){
+		my $id = find_normal_entry($address, $$datastructure{$address}, $database);
+		if ($id){
+			update_entry($id, $$datastructure{$address}, $database);
+		}
+		else {
+			print "New network found: $$datastructure{$address}->{essid} ($address)\n";
+			exit 2;
+		}
+	}
+}
 
+sub find_normal_entry {
+	my ($address, $entry, $database) = @_;
+	my $query = "select * from access_points where address = '$address';";
+	my $row = "$config{sqlite} $database $query";
+	chomp($row);
+	my @row = split(/\|/, $row);
+	my $id = $row[0];
+	if ($id){
+		anomality_check(\@row, $entry);
+		return($id);
+	}
+	else {
+		return(0);
+	}
+}
+
+sub anomality_check {
+	my ($row, $entry) = @_;
+	if ($$row[2] ne $entry->{"essid"}){
+		print "Network name of $$row[1] changed from: $$row[2] -> $entry->{essid}\n";
+		exit 2;
+	}
+	if ($$row[5] ne $entry->{"channel"}){
+		print "Channel of $$row[2] ($$row[1]) changed from: $$row[5] to $entry->{channel}\n";
+		exit 1;
+	}
+	if ($$row[6] ne $entry->{"encryptionkey"}){
+		print "Encryption of $$row[2] ($$row[1]) changed from: $$row[6] to $entry->{channel}\n";
+		exit 2;
+	}
 }
 
 sub parse_output {
