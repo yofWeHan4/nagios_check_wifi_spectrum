@@ -3,7 +3,7 @@ use strict;
 use Getopt::Long;
 use Data::Dumper;
 
-my ($config_path) = "/etc/nagios-plugins/config/wifi_scan.cfg";
+my ($config_path) = "/etc/nagios-wifi/wifi_scan.cfg";
 my $add_to_db = 0;
 GetOptions(
     'c|config_path:s' =>  \$config_path,
@@ -25,6 +25,12 @@ if ($add_to_db){
 }
 
 validate(\%datastructure, $config{"ap_database"});
+
+# we got here so everything is fine
+print "OK! No strange events found in the wifi spectrum\n";
+exit 0;
+
+
 
 sub add_entries_to_db {
 	my ($datastructure, $database) = @_;
