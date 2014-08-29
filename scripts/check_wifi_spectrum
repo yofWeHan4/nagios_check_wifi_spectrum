@@ -126,13 +126,9 @@ sub anomality_check {
 		print "Network name of $$row[1] changed from: $$row[2] -> $entry->{essid}\n";
 		exit 2;
 	}
-	if ($$row[5] ne $entry->{"channel"}){
-		print "Channel of $$row[2] ($$row[1]) changed from: $$row[5] to $entry->{channel}\n";
-		exit 1;
-	}
 	if ($$row[6] ne $entry->{"encryptionkey"}){
 		print "Encryption of $$row[2] ($$row[1]) changed from: $$row[6] to $entry->{encryptionkey}\n";
-		exit 2;
+		exit 1;
 	}
 }
 
