@@ -1,54 +1,116 @@
 #!/usr/bin/env perl
 use strict;
+use MIME::Base64;
 use Getopt::Long;
-use Data::Dumper;
 
-my ($config_path) = "/etc/nagios-wifi/wifi_scan.cfg";
+# Get commandline options
+
 my $add_to_db = 0;
+my $iwlistpath = "/sbin/iwlist";
+my $sqlitepath = "/usr/bin/sqlite3";
+my $database = "/var/lib/nagios-wifi/access_points.db";
+my $help = 0;
+my $new = "";
+my $update = "";
+my $list = "";
+
 GetOptions(
-    'c|config_path:s' =>  \$config_path,
-    'a|add' =>  \$add_to_db,
+    'a|add:i' =>  \$add_to_db,
+    'd|database:s' =>  \$database,
+    'h|help' =>  \$help,
+    'l|list' =>  \$list,
+    'p|iwlistpath:s' =>  \$iwlistpath,
+    'n|new:s' =>  \$new,
+    's|sqlitepath:s' =>  \$sqlitepath,
+    'u|update:s' => \$update,
 );
 
-my $usage = "usage: $0 -e <config-path>\n";
+#####################################
+# Everything was invoked correctly? #
+#####################################
+
+my $usage = "\nusage: $0 -d <database> -p <iwlist_binary> -s <sqlite3_binary>\n\n"
+	."  -a: autoadd found networks by invoking this script with the -a <seconds_to_scan>\n"
+	."  -l: list all networks that are currently in the database with -l\n"
+	."  -n: add one network by invoking this script with -n <encoded_string>\n"
+	."  -u: update the settings of a network by invoking the script with -u <encoded_string>\n\n";
 @ARGV == 0 || die($usage);
-die ($usage) if (!$config_path);
+die($usage) if ($help);
+die ("$iwlistpath does not exists -> provide another path using the -p option\n") if (!-f $iwlistpath);
+die ("$sqlitepath does not exists -> provide another path using the -s option\n") if (!-f $sqlitepath);
+die ("$database does not exists -> provide another path using the -d option\n") if (!-f $database);
 
-my %config = read_config($config_path);
+####################
+# Now do some work #
+####################
 
-my @scan_output = `$config{"scan_command"}`;
+if ($list){
+	list_database_entries($database,$sqlitepath);
+	exit 0;
+}
+elsif ($new){
+	print_header();
+	add_new_encoded_string($database,$sqlitepath,$new);
+	print_footer();
+	print "OK! network added correctly\n";
+	exit 0;
+}
+elsif ($update){
+	print_header();
+	update_with_encoded_string($database,$sqlitepath,$update);
+	print_footer();
+	print "OK! network updated correctly\n";
+	exit 0;
+}
+elsif ($add_to_db > 0) {
+	my $start = time;
+	my $stop = $start + $add_to_db;
+	print "\nScanning and adding to database...\nNew additions & updates:\n";
+	print_header();
+	while (time < $stop){
+		my @scan_output = `sudo $iwlistpath wlan0 scanning`;
+		my %datastructure = parse_output(@scan_output);
+		add_entries_to_db(\%datastructure, $database, $sqlitepath);
+	}
+	print_footer();
+}
+else {
+	my @scan_output = `sudo $iwlistpath wlan0 scanning`;
+	my %datastructure = parse_output(@scan_output);
+	
+	validate(\%datastructure, $database, $sqlitepath);
 
-my %datastructure = parse_output(@scan_output);
-
-if ($add_to_db){
-	add_entries_to_db(\%datastructure, $config{"ap_database"});
+	print "OK! No strange events found in the wifi spectrum\n";
+	exit 0;
 }
 
-validate(\%datastructure, $config{"ap_database"});
-
-# we got here so everything is fine
-print "OK! No strange events found in the wifi spectrum\n";
-exit 0;
-
-
+####################
+#   Subroutines    #
+####################
 
 sub add_entries_to_db {
 	my ($datastructure, $database) = @_;
 
 	foreach my $address (keys(%$datastructure)){
-		my $id = find_normal_entry($address, $$datastructure{$address}, $database);
+		my $id = find_normal_entry($address, $$datastructure{$address}, $database, $sqlitepath);
 		if ($id){
-			update_entry($id, $$datastructure{$address}, $database);
+			update_entry($address, $id, $$datastructure{$address}, $database, $sqlitepath);
 		}
 		else {
-			insert_entry($address, $$datastructure{$address}, $database);
+			insert_entry($address, $$datastructure{$address}, $database, $sqlitepath);
 		}
 	}
 }
 
 sub insert_entry {
-	my ($address, $entry, $database) = @_;
-	print "inserting $entry->{essid} ($address)\n";
+	my ($address, $entry, $database, $sqlitepath) = @_;
+	printf("| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
+                        $address,
+                        "<new>",
+                        $entry->{essid},
+                        $entry->{channel},
+                        $entry->{encryptionkey},
+        );
 	my $query = "INSERT INTO access_points 
 			VALUES (null,
 				'$address',
@@ -67,11 +129,20 @@ sub insert_entry {
 				'$entry->{auth}',
 				null
 			);";
-	my $result = `$config{"sqlite"} $database "$query"`;
+	my $result = `$sqlitepath $database "$query"`;
 }
 
 sub update_entry {
-	my ($id, $entry, $database) = @_;
+	my ($address, $id, $entry, $database, $sqlitepath) = @_;
+	if ($add_to_db > 0){
+		printf("| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
+                	        $address,
+                        	"$id",
+                       		$entry->{essid},
+                        	$entry->{channel},
+                        	$entry->{encryptionkey},
+        	);
+	}
 	my $query = "UPDATE access_points SET
 				essid = '$entry->{essid}',
 				mode = '$entry->{mode}',
@@ -87,27 +158,131 @@ sub update_entry {
 				pairwisecipher = '$entry->{pairwisecipher}',
 				auth = '$entry->{auth}'
 			WHERE id = $id;";
-	my $result = `$config{"sqlite"} $database "$query"`;
+	my $result = `$sqlitepath $database "$query"`;
 }
 
 sub validate {
-	my ($datastructure, $database) = @_;
+	my ($datastructure, $database, $sqlitepath) = @_;
 	foreach my $address (keys(%$datastructure)){
-		my $id = find_normal_entry($address, $$datastructure{$address}, $database);
+		my $id = find_normal_entry($address, $$datastructure{$address}, $database, $sqlitepath);
 		if ($id){
-			update_entry($id, $$datastructure{$address}, $database);
+			update_entry($address, $id, $$datastructure{$address}, $database, $sqlitepath);
 		}
 		else {
-			print "New network found: $$datastructure{$address}->{essid} ($address)\n";
+			my $encoded_string = encode_string(
+				$$datastructure{$address}->{essid},
+				$address,
+				$$datastructure{$address}->{channel},
+				$$datastructure{$address}->{encryptionkey}
+			);
+			print "New network found: $$datastructure{$address}->{essid} ($address).",
+				" Approve by running $0 -n $encoded_string\n";
 			exit 2;
 		}
 	}
 }
 
+sub list_database_entries {
+	my ($database, $sqlitepath) = @_;
+        my $query = "select * from access_points;";
+        my @rows = `$sqlitepath $database "$query"`;
+        chomp(@rows);
+	my %entries = ();
+	foreach my $row (@rows){
+        	my ($id, $address, $essid, undef, undef, $channel, $encryption)
+			= split(/\|/, $row);
+		$entries{$address} = [$id,$essid,$channel,$encryption];
+	}
+
+	# Print pretty!
+
+	print_header();
+	foreach my $address (sort(keys(%entries))){
+		printf("| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
+			$address,
+			$entries{$address}[0],
+			$entries{$address}[1],
+			$entries{$address}[2],
+			$entries{$address}[3],
+		);
+	}
+	print_footer();
+}
+
+sub print_header {
+	print "\n";
+	printf("%-76.76s\n",
+		"---------------------------------------------------------------------------");
+	printf("| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
+		"address","DBid","essid","chan","encryption");
+	printf("|%-22.22s|%-7.7s|%-22.22s|%-6.6s|%-12.12s|\n",
+		"----------------------","-------","-----------------------",
+		"------","------------");
+}
+
+sub print_footer {
+	printf("%-76.76s\n",
+		"---------------------------------------------------------------------------");
+	print "\n";
+}
+
+sub add_new_encoded_string {
+	my ($database, $sqlitepath,$encoded_string) = @_;
+	my ($essid,$address,$channel,$encryption) = decode_string($encoded_string);
+	printf("| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
+                        $address,"<new>", $essid, $channel,$encryption);
+        my $query = "INSERT INTO access_points 
+                        VALUES (null,
+                                '$address',
+                                '$essid',
+                                '', '',
+                                '$channel',
+                                '$encryption',
+                                '', '', '', '', '', '', '', '',
+                                null
+                        );";    
+        my $result = `$sqlitepath $database "$query"`;
+}
+
+sub update_with_encoded_string {
+	my ($database, $sqlitepath,$encoded_string) = @_;
+	my ($essid,$address,$channel,$encryption) = decode_string($encoded_string);
+	printf("| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
+                        $address,"<upd>", $essid, $channel,$encryption);
+        my $query = "UPDATE access_points SET
+                                essid = '$essid',
+                                channel = '$channel',
+                                encryptionkey = '$encryption'
+                        WHERE address = '$address';";
+        my $result = `$sqlitepath $database "$query"`;
+}
+
+sub decode_string {
+	my ($string) = @_;
+	my $decode_string = decode_base64($string);
+        my @fields = split(/,/,$decode_string);
+        my $essid = decode_base64($fields[0]);
+        my $address = decode_base64($fields[1]);
+        my $channel = decode_base64($fields[2]);
+        my $encryption = decode_base64($fields[3]);
+	return($essid,$address,$channel,$encryption);
+}
+
+sub encode_string {
+	my ($essid,$address,$channel,$encryption) = @_;
+	my $encoded_essid =  encode_base64($essid);
+        my $encoded_address = encode_base64($address);
+        my $encoded_channel = encode_base64($channel);
+        my $encoded_encryption = encode_base64($encryption);
+        my $string = join(",",$encoded_essid,$encoded_address,$encoded_channel,$encoded_encryption);
+        my $encoded_string = encode_base64($string);
+	return($encoded_string);
+}
+
 sub find_normal_entry {
-	my ($address, $entry, $database) = @_;
+	my ($address, $entry, $database, $sqlitepath) = @_;
 	my $query = "select * from access_points where address = '$address';";
-	my $row = `$config{sqlite} $database "$query"`;
+	my $row = `$sqlitepath $database "$query"`;
 	chomp($row);
 	my @row = split(/\|/, $row);
 	my $id = $row[0];
@@ -123,11 +298,18 @@ sub find_normal_entry {
 sub anomality_check {
 	my ($row, $entry) = @_;
 	if ($$row[2] ne $entry->{"essid"}){
-		print "Network name of $$row[1] changed from: $$row[2] -> $entry->{essid}\n";
+                my $string = join(",",$entry->{essid},$entry->{address},$entry->{channel},$entry->{encryptionkey});
+		my $encoded_string = encode_base64($string);
+		print "Network name of $$row[1] changed from: $$row[2] -> $entry->{essid}.".
+			" Approve by running $0 -n $encoded_string\n";
+
 		exit 2;
 	}
 	if ($$row[6] ne $entry->{"encryptionkey"}){
-		print "Encryption of $$row[2] ($$row[1]) changed from: $$row[6] to $entry->{encryptionkey}\n";
+                my $string = join(",",$entry->{essid},$entry->{address},$entry->{channel},$entry->{encryptionkey});
+		my $encoded_string = encode_base64($string);
+		print "Encryption of $$row[2] ($$row[1]) changed from: $$row[6] to $entry->{encryptionkey}.".
+			" Approve by running $0 -n $encoded_string\n";
 		exit 1;
 	}
 }
@@ -224,39 +406,4 @@ sub parse_output {
 
 	}
 	return(%datastructure);
-}
-
-sub read_config {
-
-	my $config_path = shift;
-	
-	if (!-r $config_path){
-		die("Could not read the config file. Please check $config_path\n");
-	}
-
-	my %config = ();
-	open CONFIG, " < $config_path" || die("could not open $config_path\n");
-	foreach my $line (<CONFIG>){
-
-		chomp($line);
-		next if ($line =~ /^#/);
-
-		my ($parameter, $value) = split(/=/, $line);
-		$parameter =~ s/^\s+//;
-		$value =~ s/^\s+//;
-		$parameter =~ s/\s+$//;
-		$value =~ s/\s+$//;
-
-		$config{"scan_command"} = $value if ($parameter eq "scan_command");
-		$config{"ap_database"} = $value if ($parameter eq "ap_database");
-		$config{"sqlite"} = $value if ($parameter eq "sqlite");
-	}
-	close CONFIG;
-
-	if ($config{"scan_command"} && $config{"ap_database"} && $config{"sqlite"}){
-		return(%config);
-	}
-	else {
-		die("Config file is incomplete\n.");
-	}
 }
