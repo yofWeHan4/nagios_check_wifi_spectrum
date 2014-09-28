@@ -5,98 +5,102 @@ use Getopt::Long;
 
 # Get commandline options
 
-my $add_to_db = 0;
+my $add_to_db  = 0;
 my $iwlistpath = "/sbin/iwlist";
 my $sqlitepath = "/usr/bin/sqlite3";
-my $database = "/var/lib/nagios-wifi/access_points.db";
-my $help = 0;
-my $new = "";
-my $update = "";
-my $list = "";
-my $just = "";
+my $database   = "/var/lib/nagios-wifi/access_points.db";
+my $help       = 0;
+my $new        = "";
+my $update     = "";
+my $list       = "";
+my $just       = "";
 
 GetOptions(
-    'a|add:i' =>  \$add_to_db,
-    'd|database:s' =>  \$database,
-    'h|help' =>  \$help,
-    'j|just:s' =>  \$just,
-    'l|list' =>  \$list,
-    'p|iwlistpath:s' =>  \$iwlistpath,
-    'n|new:s' =>  \$new,
-    's|sqlitepath:s' =>  \$sqlitepath,
-    'u|update:s' => \$update,
+    'a|add:i'        => \$add_to_db,
+    'd|database:s'   => \$database,
+    'h|help'         => \$help,
+    'j|just:s'       => \$just,
+    'l|list'         => \$list,
+    'p|iwlistpath:s' => \$iwlistpath,
+    'n|new:s'        => \$new,
+    's|sqlitepath:s' => \$sqlitepath,
+    'u|update:s'     => \$update,
 );
 
 #####################################
 # Everything was invoked correctly? #
 #####################################
 
-my $usage = "\nusage: $0 -d <database> -p <iwlist_binary> -s <sqlite3_binary>\n\n"
-	."  -a: autoadd found networks by invoking this script with the -a <seconds_to_scan>\n"
-	."  -h: display this help message\n"
-	."  -j: just decode encoded string with -j <encoded_string>\n"
-	."  -l: list all networks that are currently in the database with -l\n"
-	."  -n: add one network by invoking this script with -n <encoded_string>\n"
-	."  -u: update the settings of a network by invoking the script with -u <encoded_string>\n\n";
+my $usage =
+    "\nusage: $0 -d <database> -p <iwlist_binary> -s <sqlite3_binary>\n\n"
+  . "  -a: autoadd found networks by invoking this script with the -a <seconds_to_scan>\n"
+  . "  -h: display this help message\n"
+  . "  -j: just decode encoded string with -j <encoded_string>\n"
+  . "  -l: list all networks that are currently in the database with -l\n"
+  . "  -n: add one network by invoking this script with -n <encoded_string>\n"
+  . "  -u: update the settings of a network by invoking the script with -u <encoded_string>\n\n";
 @ARGV == 0 || die($usage);
 die($usage) if ($help);
-die ("$iwlistpath does not exists -> provide another path using the -p option\n") if (!-f $iwlistpath);
-die ("$sqlitepath does not exists -> provide another path using the -s option\n") if (!-f $sqlitepath);
-die ("$database does not exists -> provide another path using the -d option\n") if (!-f $database);
+die("$iwlistpath does not exists -> provide another path using the -p option\n")
+  if ( !-f $iwlistpath );
+die("$sqlitepath does not exists -> provide another path using the -s option\n")
+  if ( !-f $sqlitepath );
+die("$database does not exists -> provide another path using the -d option\n")
+  if ( !-f $database );
 
 ####################
 # Now do some work #
 ####################
 
-if ($list){
-	list_database_entries($database,$sqlitepath);
-	exit 0;
+if ($list) {
+    list_database_entries( $database, $sqlitepath );
+    exit 0;
 }
-elsif ($new){
-	print "\nnew database item:\n";
-	print_header();
-	add_new_encoded_string($database,$sqlitepath,$new);
-	print_footer();
-	print "OK! network added correctly\n";
-	exit 0;
+elsif ($new) {
+    print "\nnew database item:\n";
+    print_header();
+    add_new_encoded_string( $database, $sqlitepath, $new );
+    print_footer();
+    print "OK! network added correctly\n";
+    exit 0;
 }
-elsif ($update){
-	print "\nupdated database item:\n";
-	print_header();
-	update_with_encoded_string($database,$sqlitepath,$update);
-	print_footer();
-	print "OK! network updated correctly\n";
-	exit 0;
+elsif ($update) {
+    print "\nupdated database item:\n";
+    print_header();
+    update_with_encoded_string( $database, $sqlitepath, $update );
+    print_footer();
+    print "OK! network updated correctly\n";
+    exit 0;
 }
-elsif ($just){
-	my ($essid,$address,$channel,$encryption) = decode_string($just);
-	print "\ndecoded item:\n";
-	print_header();
-	printf("| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
-                        $address,"<NA>",$essid,$channel,$encryption);
-	print_footer();
+elsif ($just) {
+    my ( $essid, $address, $channel, $encryption ) = decode_string($just);
+    print "\ndecoded item:\n";
+    print_header();
+    printf( "| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
+        $address, "<NA>", $essid, $channel, $encryption );
+    print_footer();
 
 }
-elsif ($add_to_db > 0) {
-	my $start = time;
-	my $stop = $start + $add_to_db;
-	print "\nScanning and adding to database...\nNew additions & updates:\n";
-	print_header();
-	while (time < $stop){
-		my @scan_output = `sudo $iwlistpath wlan0 scanning`;
-		my %datastructure = parse_output(@scan_output);
-		add_entries_to_db(\%datastructure, $database, $sqlitepath);
-	}
-	print_footer();
+elsif ( $add_to_db > 0 ) {
+    my $start = time;
+    my $stop  = $start + $add_to_db;
+    print "\nScanning and adding to database...\nNew additions & updates:\n";
+    print_header();
+    while ( time < $stop ) {
+        my @scan_output   = `sudo $iwlistpath wlan0 scanning`;
+        my %datastructure = parse_output(@scan_output);
+        add_entries_to_db( \%datastructure, $database, $sqlitepath );
+    }
+    print_footer();
 }
 else {
-	my @scan_output = `sudo $iwlistpath wlan0 scanning`;
-	my %datastructure = parse_output(@scan_output);
-	
-	validate(\%datastructure, $database, $sqlitepath);
+    my @scan_output   = `sudo $iwlistpath wlan0 scanning`;
+    my %datastructure = parse_output(@scan_output);
 
-	print "OK! No strange events found in the wifi spectrum\n";
-	exit 0;
+    validate( \%datastructure, $database, $sqlitepath );
+
+    print "OK! No strange events found in the wifi spectrum\n";
+    exit 0;
 }
 
 ####################
@@ -104,29 +108,30 @@ else {
 ####################
 
 sub add_entries_to_db {
-	my ($datastructure, $database) = @_;
+    my ( $datastructure, $database ) = @_;
 
-	foreach my $address (keys(%$datastructure)){
-		my $id = find_normal_entry($address, $$datastructure{$address}, $database, $sqlitepath);
-		if ($id){
-			update_entry($address, $id, $$datastructure{$address}, $database, $sqlitepath);
-		}
-		else {
-			insert_entry($address, $$datastructure{$address}, $database, $sqlitepath);
-		}
-	}
+    foreach my $address ( keys(%$datastructure) ) {
+        my $id = find_normal_entry( $address, $$datastructure{$address},
+            $database, $sqlitepath );
+        if ($id) {
+            update_entry( $address, $id, $$datastructure{$address},
+                $database, $sqlitepath );
+        }
+        else {
+            insert_entry( $address, $$datastructure{$address},
+                $database, $sqlitepath );
+        }
+    }
 }
 
 sub insert_entry {
-	my ($address, $entry, $database, $sqlitepath) = @_;
-	printf("| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
-                        $address,
-                        "<new>",
-                        $entry->{essid},
-                        $entry->{channel},
-                        $entry->{encryptionkey},
-        );
-	my $query = "INSERT INTO access_points 
+    my ( $address, $entry, $database, $sqlitepath ) = @_;
+    printf(
+        "| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
+        $address, "<new>", $entry->{essid}, $entry->{channel},
+        $entry->{encryptionkey},
+    );
+    my $query = "INSERT INTO access_points 
 			VALUES (null,
 				'$address',
 				'$entry->{essid}',
@@ -144,21 +149,19 @@ sub insert_entry {
 				'$entry->{auth}',
 				null
 			);";
-	my $result = `$sqlitepath $database "$query"`;
+    my $result = `$sqlitepath $database "$query"`;
 }
 
 sub update_entry {
-	my ($address, $id, $entry, $database, $sqlitepath) = @_;
-	if ($add_to_db || $update){
-		printf("| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
-                	        $address,
-                        	"$id",
-                       		$entry->{essid},
-                        	$entry->{channel},
-                        	$entry->{encryptionkey},
-        	);
-	}
-	my $query = "UPDATE access_points SET
+    my ( $address, $id, $entry, $database, $sqlitepath ) = @_;
+    if ( $add_to_db || $update ) {
+        printf(
+            "| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
+            $address, "$id", $entry->{essid}, $entry->{channel},
+            $entry->{encryptionkey},
+        );
+    }
+    my $query = "UPDATE access_points SET
 				essid = '$entry->{essid}',
 				mode = '$entry->{mode}',
 				frequency = '$entry->{frequency}',
@@ -173,80 +176,87 @@ sub update_entry {
 				pairwisecipher = '$entry->{pairwisecipher}',
 				auth = '$entry->{auth}'
 			WHERE id = $id;";
-	my $result = `$sqlitepath $database "$query"`;
+    my $result = `$sqlitepath $database "$query"`;
 }
 
 sub validate {
-	my ($datastructure, $database, $sqlitepath) = @_;
-	foreach my $address (keys(%$datastructure)){
-		my $id = find_normal_entry($address, $$datastructure{$address}, $database, $sqlitepath);
-		if ($id){
-			update_entry($address, $id, $$datastructure{$address}, $database, $sqlitepath);
-		}
-		else {
-			my $encoded_string = encode_string(
-				$$datastructure{$address}->{essid},
-				$address,
-				$$datastructure{$address}->{channel},
-				$$datastructure{$address}->{encryptionkey}
-			);
-			print "New network found: $$datastructure{$address}->{essid} ($address).",
-				" $encoded_string\n";
-			exit 2;
-		}
-	}
+    my ( $datastructure, $database, $sqlitepath ) = @_;
+    foreach my $address ( keys(%$datastructure) ) {
+        my $id = find_normal_entry( $address, $$datastructure{$address},
+            $database, $sqlitepath );
+        if ($id) {
+            update_entry( $address, $id, $$datastructure{$address},
+                $database, $sqlitepath );
+        }
+        else {
+            my $encoded_string = encode_string(
+                $$datastructure{$address}->{essid},
+                $address,
+                $$datastructure{$address}->{channel},
+                $$datastructure{$address}->{encryptionkey}
+            );
+            print
+"New network found: $$datastructure{$address}->{essid} ($address).",
+              " $encoded_string\n";
+            exit 2;
+        }
+    }
 }
 
 sub list_database_entries {
-	my ($database, $sqlitepath) = @_;
-        my $query = "select * from access_points;";
-        my @rows = `$sqlitepath $database "$query"`;
-        chomp(@rows);
-	my %entries = ();
-	foreach my $row (@rows){
-        	my ($id, $address, $essid, undef, undef, $channel, $encryption)
-			= split(/\|/, $row);
-		$entries{$address} = [$id,$essid,$channel,$encryption];
-	}
+    my ( $database, $sqlitepath ) = @_;
+    my $query = "select * from access_points;";
+    my @rows  = `$sqlitepath $database "$query"`;
+    chomp(@rows);
+    my %entries = ();
+    foreach my $row (@rows) {
+        my ( $id, $address, $essid, undef, undef, $channel, $encryption ) =
+          split( /\|/, $row );
+        $entries{$address} = [ $id, $essid, $channel, $encryption ];
+    }
 
-	# Print pretty!
+    # Print pretty!
 
-	print_header();
-	foreach my $address (sort(keys(%entries))){
-		printf("| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
-			$address,
-			$entries{$address}[0],
-			$entries{$address}[1],
-			$entries{$address}[2],
-			$entries{$address}[3],
-		);
-	}
-	print_footer();
+    print_header();
+    foreach my $address ( sort( keys(%entries) ) ) {
+        printf(
+            "| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
+            $address,              $entries{$address}[0],
+            $entries{$address}[1], $entries{$address}[2],
+            $entries{$address}[3],
+        );
+    }
+    print_footer();
 }
 
 sub print_header {
-	print "\n";
-	printf("%-76.76s\n",
-		"---------------------------------------------------------------------------");
-	printf("| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
-		"address","DBid","essid","chan","encryption");
-	printf("|%-22.22s|%-7.7s|%-22.22s|%-6.6s|%-12.12s|\n",
-		"----------------------","-------","-----------------------",
-		"------","------------");
+    print "\n";
+    printf( "%-76.76s\n",
+"---------------------------------------------------------------------------"
+    );
+    printf( "| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
+        "address", "DBid", "essid", "chan", "encryption" );
+    printf(
+        "|%-22.22s|%-7.7s|%-22.22s|%-6.6s|%-12.12s|\n",
+        "----------------------", "-------", "-----------------------",
+        "------",                 "------------"
+    );
 }
 
 sub print_footer {
-	printf("%-76.76s\n",
-		"---------------------------------------------------------------------------");
-	print "\n";
+    printf( "%-76.76s\n",
+"---------------------------------------------------------------------------"
+    );
+    print "\n";
 }
 
 sub add_new_encoded_string {
-	my ($database, $sqlitepath,$encoded_string) = @_;
-	my ($essid,$address,$channel,$encryption) = decode_string($encoded_string);
-	printf("| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
-                        $address,"<new>", $essid, $channel,$encryption);
-        my $query = "INSERT INTO access_points 
+    my ( $database, $sqlitepath, $encoded_string ) = @_;
+    my ( $essid, $address, $channel, $encryption ) =
+      decode_string($encoded_string);
+    printf( "| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
+        $address, "<new>", $essid, $channel, $encryption );
+    my $query = "INSERT INTO access_points 
                         VALUES (null,
                                 '$address',
                                 '$essid',
@@ -255,178 +265,194 @@ sub add_new_encoded_string {
                                 '$encryption',
                                 '', '', '', '', '', '', '', '',
                                 null
-                        );";    
-        my $result = `$sqlitepath $database "$query"`;
+                        );";
+    my $result = `$sqlitepath $database "$query"`;
 }
 
 sub update_with_encoded_string {
-	my ($database, $sqlitepath,$encoded_string) = @_;
-	my ($essid,$address,$channel,$encryption) = decode_string($encoded_string);
-	printf("| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
-                        $address,"<upd>", $essid, $channel,$encryption);
-        my $query = "UPDATE access_points SET
+    my ( $database, $sqlitepath, $encoded_string ) = @_;
+    my ( $essid, $address, $channel, $encryption ) =
+      decode_string($encoded_string);
+    printf( "| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
+        $address, "<upd>", $essid, $channel, $encryption );
+    my $query = "UPDATE access_points SET
                                 essid = '$essid',
                                 channel = '$channel',
                                 encryptionkey = '$encryption'
                         WHERE address = '$address';";
-        my $result = `$sqlitepath $database "$query"`;
+    my $result = `$sqlitepath $database "$query"`;
 }
 
 sub decode_string {
-	my ($string) = @_;
-	my $decode_string = decode_base64($string);
-        my @fields = split(/,/,$decode_string);
-        my $essid = decode_base64($fields[0]);
-        my $address = decode_base64($fields[1]);
-        my $channel = decode_base64($fields[2]);
-        my $encryption = decode_base64($fields[3]);
-	return($essid,$address,$channel,$encryption);
+    my ($string) = @_;
+    my $decode_string = decode_base64($string);
+    my @fields     = split( /,/, $decode_string );
+    my $essid      = decode_base64( $fields[0] );
+    my $address    = decode_base64( $fields[1] );
+    my $channel    = decode_base64( $fields[2] );
+    my $encryption = decode_base64( $fields[3] );
+    return ( $essid, $address, $channel, $encryption );
 }
 
 sub encode_string {
 
-	my ($essid,$address,$channel,$encryption) = @_;
+    my ( $essid, $address, $channel, $encryption ) = @_;
 
-	my $encoded_essid =  encode_base64($essid);
-	chomp($encoded_essid);
-        my $encoded_address = encode_base64($address);
-	chomp($encoded_address);
-        my $encoded_channel = encode_base64($channel);
-	chomp($encoded_channel);
-        my $encoded_encryption = encode_base64($encryption);
-	chomp($encoded_encryption);
-        my $string = join(",",$encoded_essid,$encoded_address,$encoded_channel,$encoded_encryption);
-        my $encoded_string = encode_base64($string);
-	chomp($encoded_string);
+    my $encoded_essid = encode_base64($essid);
+    chomp($encoded_essid);
+    my $encoded_address = encode_base64($address);
+    chomp($encoded_address);
+    my $encoded_channel = encode_base64($channel);
+    chomp($encoded_channel);
+    my $encoded_encryption = encode_base64($encryption);
+    chomp($encoded_encryption);
+    my $string = join( ",",
+        $encoded_essid,   $encoded_address,
+        $encoded_channel, $encoded_encryption );
+    my $encoded_string = encode_base64($string);
+    chomp($encoded_string);
 
-	return($encoded_string);
+    return ($encoded_string);
 }
 
 sub find_normal_entry {
-	my ($address, $entry, $database, $sqlitepath) = @_;
-	my $query = "select * from access_points where address = '$address';";
-	my $row = `$sqlitepath $database "$query"`;
-	chomp($row);
-	my @row = split(/\|/, $row);
-	my $id = $row[0];
-	if ($id){
-		anomality_check(\@row, $entry);
-		return($id);
-	}
-	else {
-		return(0);
-	}
+    my ( $address, $entry, $database, $sqlitepath ) = @_;
+    my $query = "select * from access_points where address = '$address';";
+    my $row   = `$sqlitepath $database "$query"`;
+    chomp($row);
+    my @row = split( /\|/, $row );
+    my $id = $row[0];
+    if ($id) {
+        anomality_check( \@row, $entry );
+        return ($id);
+    }
+    else {
+        return (0);
+    }
 }
 
 sub anomality_check {
-	my ($row, $entry) = @_;
-	if ($$row[2] ne $entry->{"essid"}){
-                my $string = join(",",$entry->{essid},$entry->{address},$entry->{channel},$entry->{encryptionkey});
-		my $encoded_string = encode_base64($string);
-		print "Network name of $$row[1] changed from: $$row[2] -> $entry->{essid}.".
-			" $encoded_string\n";
+    my ( $row, $entry ) = @_;
+    if ( $$row[2] ne $entry->{"essid"} ) {
+        my $string = join( ",",
+            $entry->{essid},   $entry->{address},
+            $entry->{channel}, $entry->{encryptionkey} );
+        my $encoded_string = encode_base64($string);
+        print
+          "Network name of $$row[1] changed from: $$row[2] -> $entry->{essid}."
+          . " $encoded_string\n";
 
-		exit 2;
-	}
-	if ($$row[6] ne $entry->{"encryptionkey"}){
-                my $string = join(",",$entry->{essid},$entry->{address},$entry->{channel},$entry->{encryptionkey});
-		my $encoded_string = encode_base64($string);
-		print "Encryption of $$row[2] ($$row[1]) changed from: $$row[6] to $entry->{encryptionkey}.".
-			" $encoded_string\n";
-		exit 1;
-	}
+        exit 2;
+    }
+    if ( $$row[6] ne $entry->{"encryptionkey"} ) {
+        my $string = join( ",",
+            $entry->{essid},   $entry->{address},
+            $entry->{channel}, $entry->{encryptionkey} );
+        my $encoded_string = encode_base64($string);
+        print
+"Encryption of $$row[2] ($$row[1]) changed from: $$row[6] to $entry->{encryptionkey}."
+          . " $encoded_string\n";
+        exit 1;
+    }
 }
 
 sub parse_output {
-	my @output = @_;
-	my $address = "";
-	my %datastructure = ();
-	foreach my $line (@output){
-		if ($line =~ /- Address:/){
-			($address) = $line =~ /- Address: (.+)$/;
-			if ($datastructure{$address}){
-				print "$address found multiple times, possible spoof attempt\n";
-				exit 2;
-			} else {
-				$datastructure{$address} = {};
-			}
-		}
-		if ($line =~ /ESSID:/){
-			my ($essid) = $line =~ /ESSID:"(.+)"$/;
-			$datastructure{$address}->{"essid"} = $essid;
-		}
-		if ($line =~ /Protocol:/){
-			my ($protocol) = $line =~ /Protocol:(.+)$/;
-			$datastructure{$address}->{"protocol"} = $protocol;
-		}
-		if ($line =~ /Mode:/){
-                        my ($mode) = $line =~ /Mode:(.+)$/;
-                        $datastructure{$address}->{"mode"} = $mode;
+    my @output        = @_;
+    my $address       = "";
+    my %datastructure = ();
+    foreach my $line (@output) {
+        if ( $line =~ /- Address:/ ) {
+            ($address) = $line =~ /- Address: (.+)$/;
+            if ( $datastructure{$address} ) {
+                print "$address found multiple times, possible spoof attempt\n";
+                exit 2;
+            }
+            else {
+                $datastructure{$address} = {};
+            }
+        }
+        if ( $line =~ /ESSID:/ ) {
+            my ($essid) = $line =~ /ESSID:"(.+)"$/;
+            $datastructure{$address}->{"essid"} = $essid;
+        }
+        if ( $line =~ /Protocol:/ ) {
+            my ($protocol) = $line =~ /Protocol:(.+)$/;
+            $datastructure{$address}->{"protocol"} = $protocol;
+        }
+        if ( $line =~ /Mode:/ ) {
+            my ($mode) = $line =~ /Mode:(.+)$/;
+            $datastructure{$address}->{"mode"} = $mode;
 
-		}
-        	if ($line =~ /Frequency:/){
-                        my ($frequency, $channel) = $line =~ /Frequency:(.+) \(Channel (.+)\)$/;
-                        $datastructure{$address}->{"frequency"} = $frequency;
-                        $datastructure{$address}->{"channel"} = $channel;
+        }
+        if ( $line =~ /Frequency:/ ) {
+            my ( $frequency, $channel ) =
+              $line =~ /Frequency:(.+) \(Channel (.+)\)$/;
+            $datastructure{$address}->{"frequency"} = $frequency;
+            $datastructure{$address}->{"channel"}   = $channel;
 
-		}
-        	if ($line =~ /Encryption key:/){
-                        my ($encryptionkey) = $line =~ /Encryption key:(.+)$/;
-                        $datastructure{$address}->{"encryptionkey"} = $encryptionkey;
+        }
+        if ( $line =~ /Encryption key:/ ) {
+            my ($encryptionkey) = $line =~ /Encryption key:(.+)$/;
+            $datastructure{$address}->{"encryptionkey"} = $encryptionkey;
 
-		}
-        	if ($line =~ /Bit Rates:/){
-                        my ($bitrates) = $line =~ /Bit Rates:(.+)$/;
-                        $datastructure{$address}->{"bitrates"} = $bitrates;
+        }
+        if ( $line =~ /Bit Rates:/ ) {
+            my ($bitrates) = $line =~ /Bit Rates:(.+)$/;
+            $datastructure{$address}->{"bitrates"} = $bitrates;
 
-		}
-        	if ($line =~ /Quality=/){
-                        my ($quality) = $line =~ /Quality=(.+?)\/100/;
-                        $datastructure{$address}->{"quality"} = $quality;
-                        my ($signalstrength) = $line =~ /Signal level=(.+?)\/100/;
-                        $datastructure{$address}->{"signalstrength"} = $signalstrength;
-		}
-        	if ($line =~ /Extra:/){
-                        my ($extra) = $line =~ /Extra:(.+)$/;
-			if ($datastructure{$address}->{"extra"}){
-	                        $datastructure{$address}->{"extra"} .= "; $extra";
-			} else {
-	                        $datastructure{$address}->{"extra"} = $extra;
-			}
-		}
-        	if ($line =~ /IE:/){
-                        my ($ie) = $line =~ /IE: (.+)$/;
-			if ($datastructure{$address}->{"ie"}){
-	                        $datastructure{$address}->{"ie"} .= "; $ie";
-			} else {
-	                        $datastructure{$address}->{"ie"} = $ie;
-			}
-		}
-        	if ($line =~ /Group Cipher : /){
-                        my ($gcipher) = $line =~ /Group Cipher : (.+)$/;
-			if ($datastructure{$address}->{"groupcipher"}){
-	                        $datastructure{$address}->{"groupcipher"} .= "; $gcipher";
-			} else {
-	                        $datastructure{$address}->{"groupcipher"} = $gcipher;
-			}
-		}
-        	if ($line =~ /Pairwise Ciphers /){
-                        my ($pcipher) = $line =~ /Pairwise Ciphers.*: (.+)$/;
-			if ($datastructure{$address}->{"pairwiseciphers"}){
-	                        $datastructure{$address}->{"pairwiseciphers"} .= "; $pcipher";
-			} else {
-	                        $datastructure{$address}->{"pairwiseciphers"} = $pcipher;
-			}
-		}
-        	if ($line =~ /Authentication Suites /){
-                        my ($auth) = $line =~ /Authentication Suites.*: (.+)$/;
-			if ($datastructure{$address}->{"auth"}){
-	                        $datastructure{$address}->{"auth"} .= "; $auth";
-			} else {
-	                        $datastructure{$address}->{"auth"} = $auth;
-			}
-		}
+        }
+        if ( $line =~ /Quality=/ ) {
+            my ($quality) = $line =~ /Quality=(.+?)\/100/;
+            $datastructure{$address}->{"quality"} = $quality;
+            my ($signalstrength) = $line =~ /Signal level=(.+?)\/100/;
+            $datastructure{$address}->{"signalstrength"} = $signalstrength;
+        }
+        if ( $line =~ /Extra:/ ) {
+            my ($extra) = $line =~ /Extra:(.+)$/;
+            if ( $datastructure{$address}->{"extra"} ) {
+                $datastructure{$address}->{"extra"} .= "; $extra";
+            }
+            else {
+                $datastructure{$address}->{"extra"} = $extra;
+            }
+        }
+        if ( $line =~ /IE:/ ) {
+            my ($ie) = $line =~ /IE: (.+)$/;
+            if ( $datastructure{$address}->{"ie"} ) {
+                $datastructure{$address}->{"ie"} .= "; $ie";
+            }
+            else {
+                $datastructure{$address}->{"ie"} = $ie;
+            }
+        }
+        if ( $line =~ /Group Cipher : / ) {
+            my ($gcipher) = $line =~ /Group Cipher : (.+)$/;
+            if ( $datastructure{$address}->{"groupcipher"} ) {
+                $datastructure{$address}->{"groupcipher"} .= "; $gcipher";
+            }
+            else {
+                $datastructure{$address}->{"groupcipher"} = $gcipher;
+            }
+        }
+        if ( $line =~ /Pairwise Ciphers / ) {
+            my ($pcipher) = $line =~ /Pairwise Ciphers.*: (.+)$/;
+            if ( $datastructure{$address}->{"pairwiseciphers"} ) {
+                $datastructure{$address}->{"pairwiseciphers"} .= "; $pcipher";
+            }
+            else {
+                $datastructure{$address}->{"pairwiseciphers"} = $pcipher;
+            }
+        }
+        if ( $line =~ /Authentication Suites / ) {
+            my ($auth) = $line =~ /Authentication Suites.*: (.+)$/;
+            if ( $datastructure{$address}->{"auth"} ) {
+                $datastructure{$address}->{"auth"} .= "; $auth";
+            }
+            else {
+                $datastructure{$address}->{"auth"} = $auth;
+            }
+        }
 
-	}
-	return(%datastructure);
+    }
+    return (%datastructure);
 }
