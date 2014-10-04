@@ -1,29 +1,33 @@
-############################################
-# copy plugin into plugin folder of nagios #
-############################################
+######################################
+#                                    #
+#           DEFAULT VALUES           #
+#                                    #
+######################################
 
-DEFAULT=/usr/lib/nagios/plugins
-echo "What is the location of the nagios plugin folder? [${DEFAULT}]:"
+
+DEFAULT_INTERFACE="wlan0"
+DEFAULT_DATABASE_PATH="/var/lib/nagios-wifi"
+
+
+
+################################
+# preferable network interface #
+################################
+
+DEFAULT=$DEFAULT_INTERFACE
+echo "What is the network interface that is used for scanning? [${DEFAULT}]:"
 read ANSWER
 case "$ANSWER" in
  "") ANSWER=$DEFAULT;;
 esac
-sudo cp -i scripts/check_wifi_spectrum $ANSWER/check_wifi_spectrum && sudo chmod +x ${ANSWER}/check_wifi_spectrum
-if [ $? -eq 0 ]
-then
-	echo "[OK] Copy the nagios script to ${ANSWER}"
-else
-	echo "[ERROR] Copy the nagios script to ${ANSWER}"
-	exit 1
-fi
-echo
+INTERFACE=$ANSWER
 
 ##################################
 # location of the wifi databases #
 ##################################
 
-DEFAULT=/var/lib/nagios-wifi
-echo "Location of the wifi databases (will be created)? [${DEFAULT}]:"
+DEFAULT=$DEFAULT_DATABASE_PATH
+echo "Location of the wifi databases (that will be created)? [${DEFAULT}]:"
 read ANSWER
 case "$ANSWER" in
  "") ANSWER=$DEFAULT;;
@@ -60,13 +64,35 @@ case "$ANSWER" in
  "") ANSWER=$DEFAULT;;
 esac
 CONFIG=$ANSWER/check_wifi_spectrum.cfg
-sudo cp -i config/check_wifi_spectrum.cfg $CONFIG && sudo sed -i -e 's|REPLACE|'$DATABASE'|' $CONFIG
+sudo cp -i config/check_wifi_spectrum.cfg $CONFIG && \
+	sudo sed -i -e 's|DATABASE|'$DATABASE'|' $CONFIG &&\
+	sudo sed -i -e 's|INTERFACE|'$INTERFACE'|' $CONFIG
 if [ $? -eq 0 ]
 then
 	echo "[OK] Copy the plugin configuration to ${ANSWER}"
 else
 	echo "[ERROR] Copy the plugin configuration to ${ANSWER}"
 	exit 1
+fi
+echo
+
+############################################
+# copy plugin into plugin folder of nagios #
+############################################
+
+DEFAULT=/usr/lib/nagios/plugins
+echo "What is the location of the nagios plugin folder? [${DEFAULT}]:"
+read ANSWER
+case "$ANSWER" in
+ "") ANSWER=$DEFAULT;;
+esac
+sudo cp -i scripts/check_wifi_spectrum $ANSWER/check_wifi_spectrum && sudo chmod +x ${ANSWER}/check_wifi_spectrum
+if [ $? -eq 0 ]
+then
+        echo "[OK] Copy the nagios script to ${ANSWER}"
+else
+        echo "[ERROR] Copy the nagios script to ${ANSWER}"
+        exit 1
 fi
 echo
 
@@ -139,3 +165,6 @@ echo "[DONE] installation done"
 echo 
 echo "If you want to fill the database even more, run:"
 echo "sudo /usr/lib/nagios/plugins/check_wifi_spectrum -a <time_you_want_to_scan_in_sec>"
+echo
+echo "--> IMPORTANT! configure the sudoers file in a way that nagios can run the iwlist command without password"
+echo "--> IMPORTANT! otherwise the deamon will not be able to run the command"

@@ -5,7 +5,7 @@ use Getopt::Long;
 
 # Get commandline options
 
-my $add_to_db  = 0;
+my $add        = 0;
 my $iwlistpath = "/sbin/iwlist";
 my $sqlitepath = "/usr/bin/sqlite3";
 my $database   = "/var/lib/nagios-wifi/access_points.db";
@@ -13,13 +13,15 @@ my $help       = 0;
 my $new        = "";
 my $update     = "";
 my $list       = "";
-my $just       = "";
+my $check      = "";
+my $interface  = "wlan0";
 
 GetOptions(
-    'a|add:i'        => \$add_to_db,
+    'a|add:i'        => \$add,
     'd|database:s'   => \$database,
     'h|help'         => \$help,
-    'j|just:s'       => \$just,
+    'i|interface:s'  => \$interface,
+    'j|just:s'       => \$check,
     'l|list'         => \$list,
     'p|iwlistpath:s' => \$iwlistpath,
     'n|new:s'        => \$new,
@@ -36,6 +38,7 @@ my $usage =
   . "  -a: autoadd found networks by invoking this script with the -a <seconds_to_scan>\n"
   . "  -h: display this help message\n"
   . "  -j: just decode encoded string with -j <encoded_string>\n"
+  . "  -j: interface that is used to scan -i <interface_name>\n"
   . "  -l: list all networks that are currently in the database with -l\n"
   . "  -n: add one network by invoking this script with -n <encoded_string>\n"
   . "  -u: update the settings of a network by invoking the script with -u <encoded_string>\n\n";
@@ -51,6 +54,8 @@ die("$database does not exists -> provide another path using the -d option\n")
 ####################
 # Now do some work #
 ####################
+
+my $scan_command = "sudo $iwlistpath $interface scanning";
 
 if ($list) {
     list_database_entries( $database, $sqlitepath );
@@ -72,8 +77,8 @@ elsif ($update) {
     print "OK! network updated correctly\n";
     exit 0;
 }
-elsif ($just) {
-    my ( $essid, $address, $channel, $encryption ) = decode_string($just);
+elsif ($check) {
+    my ( $essid, $address, $channel, $encryption ) = decode_string($check);
     print "\ndecoded item:\n";
     print_header();
     printf( "| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
@@ -81,26 +86,33 @@ elsif ($just) {
     print_footer();
 
 }
-elsif ( $add_to_db > 0 ) {
+elsif ($add) {
     my $start = time;
-    my $stop  = $start + $add_to_db;
+    my $stop  = $start + $add;
     print "\nScanning and adding to database...\nNew additions & updates:\n";
     print_header();
     while ( time < $stop ) {
-        my @scan_output   = `sudo $iwlistpath wlan0 scanning`;
+        my @scan_output   = `$scan_command`;
         my %datastructure = parse_output(@scan_output);
         add_entries_to_db( \%datastructure, $database, $sqlitepath );
     }
     print_footer();
 }
 else {
-    my @scan_output   = `sudo $iwlistpath wlan0 scanning`;
-    my %datastructure = parse_output(@scan_output);
+    my @scan_output   = `$scan_command`;
 
-    validate( \%datastructure, $database, $sqlitepath );
+    if (scalar(@scan_output) > 0) {
+        my %datastructure = parse_output(@scan_output);
 
-    print "OK! No strange events found in the wifi spectrum\n";
-    exit 0;
+        validate( \%datastructure, $database, $sqlitepath );
+
+        print "OK! No strange events found in the wifi spectrum\n";
+        exit 0;
+    }
+    else {
+        print "UNKNOWN! scan did not gave any results. Is user nagios allowed to run iwlist as root w/o pwd?\n";
+        exit 3;
+    }
 }
 
 ####################
@@ -154,7 +166,7 @@ sub insert_entry {
 
 sub update_entry {
     my ( $address, $id, $entry, $database, $sqlitepath ) = @_;
-    if ( $add_to_db || $update ) {
+    if ( $add || $update ) {
         printf(
             "| %-20.20s | %-5.5s | %-20.20s | %-4.4s | %-10.10s |\n",
             $address, "$id", $entry->{essid}, $entry->{channel},
